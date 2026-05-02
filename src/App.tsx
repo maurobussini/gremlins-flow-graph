@@ -41,16 +41,45 @@ function App() {
   const containerRef = useRef<HTMLDivElement>(null)
   const [flowData, setFlowData] = useState<FlowData | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [jsonInput, setJsonInput] = useState('')
+  const [showDialog, setShowDialog] = useState(true)
 
-  useEffect(() => {
+  const handleLoadJson = () => {
+    try {
+      const parsed = JSON.parse(jsonInput) as FlowData
+      if (!parsed.title || !Array.isArray(parsed.steps)) {
+        throw new Error('Invalid format: must have "title" and "steps" array')
+      }
+      setFlowData(parsed)
+      setShowDialog(false)
+      setError(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Invalid JSON')
+    }
+  }
+
+  const handleLoadSample = () => {
     fetch('/data/sample01.json')
       .then(res => {
-        if (!res.ok) throw new Error('Failed to load flow data')
+        if (!res.ok) throw new Error('Failed to load sample data')
         return res.json()
       })
-      .then(data => setFlowData(data))
+      .then(data => {
+        setFlowData(data)
+        setJsonInput(JSON.stringify(data, null, 2))
+        setShowDialog(false)
+        setError(null)
+      })
       .catch(err => setError(err.message))
-  }, [])
+  }
+
+  const handleReset = () => {
+    setShowDialog(true)
+    setFlowData(null)
+    if (graphRef.current) {
+      graphRef.current._d3Graph = null
+    }
+  }
 
   useEffect(() => {
     if (!flowData || !containerRef.current || graphRef.current) return
@@ -130,12 +159,39 @@ function App() {
   }, [flowData])
 
   if (error) return <div style={{ padding: 20 }}>Error: {error}</div>
-  if (!flowData) return <div style={{ padding: 20 }}>Loading...</div>
+
+  if (showDialog || !flowData) {
+    return (
+      <div className="dialog-overlay">
+        <div className="dialog">
+          <h2>Carica Flow JSON</h2>
+          <p>Incolla il contenuto del file JSON per visualizzare il grafo:</p>
+          <textarea
+            className="json-input"
+            value={jsonInput}
+            onChange={e => setJsonInput(e.target.value)}
+            placeholder='{"title": "My Flow", "steps": [...]}'
+          />
+          <div className="dialog-buttons">
+            <button onClick={handleLoadJson} className="btn-primary">
+              Carica
+            </button>
+            <button onClick={handleLoadSample} className="btn-secondary">
+              Carica Sample
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <header style={{ padding: '12px 20px', background: '#fff', borderBottom: '1px solid #ddd' }}>
+      <header style={{ padding: '12px 20px', background: '#fff', borderBottom: '1px solid #ddd', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h1 style={{ fontSize: 18, fontWeight: 600 }}>{flowData.title}</h1>
+        <button onClick={handleReset} className="btn-small">
+          Nuovo
+        </button>
       </header>
       <div ref={containerRef} style={{ flex: 1 }} />
     </div>
