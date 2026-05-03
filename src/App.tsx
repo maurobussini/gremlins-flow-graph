@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useRef } from 'react'
 import ForceGraph2D from 'react-force-graph-2d'
-import { Upload, FileJson, RotateCcw, Network, GitBranch } from 'lucide-react'
+import { Upload, FileJson, RotateCcw, Network, GitBranch, Maximize2 } from 'lucide-react'
 import { Button } from './components/ui/button'
 import { Textarea } from './components/ui/textarea'
 
@@ -102,6 +102,8 @@ function App() {
   const [showDialog, setShowDialog] = useState(true)
   const [isDragging, setIsDragging] = useState(false)
   const [showDeps, setShowDeps] = useState(false)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [selectedNode, setSelectedNode] = useState<string | null>(null)
 
   const loadFlowData = useCallback((data: FlowData) => {
     setFlowData(data)
@@ -133,6 +135,16 @@ function App() {
     setFlowData(null)
     setError(null)
   }
+
+  const handleFitToCanvas = useCallback(() => {
+    graphRef.current?.zoomToFit(400, 0.1)
+  }, [])
+
+  const handleNodeClick = useCallback((node: GraphNode) => {
+    setSelectedNode(node.id)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    graphRef.current?.zoomToFit(400, 0.3, (n: any) => n.id === node.id)
+  }, [])
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault()
@@ -290,6 +302,10 @@ function App() {
             <GitBranch className="w-4 h-4 mr-2" />
             {showDeps ? "Deps" : "Deps"}
           </Button>
+          <Button variant="outline" size="sm" onClick={handleFitToCanvas}>
+            <Maximize2 className="w-4 h-4 mr-2" />
+            Fit
+          </Button>
           <Button variant="outline" size="sm" onClick={handleReset}>
             <RotateCcw className="w-4 h-4 mr-2" />
             New
@@ -311,7 +327,8 @@ function App() {
             const bckgWidth = textWidth + fontSize * 0.2
             const bckgHeight = fontSize + fontSize * 0.2
 
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.8)'
+            const isSelected = node.id === selectedNode
+            ctx.fillStyle = isSelected ? '#fef08a' : 'rgba(255, 255, 255, 0.8)'
             ctx.fillRect(node.x - bckgWidth / 2, node.y - bckgHeight / 2, bckgWidth, bckgHeight)
 
             ctx.textAlign = 'center'
@@ -334,14 +351,40 @@ function App() {
               )
             }
           }}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          linkCanvasObject={(link: any, ctx, globalScale) => {
+            const start = link.source
+            const end = link.target
+
+            ctx.strokeStyle = link.isPrimary ? '#999' : '#f97316'
+            ctx.lineWidth = 1 / globalScale
+
+            if (link.isPrimary) {
+              ctx.setLineDash([])
+            } else {
+              ctx.setLineDash([5, 5])
+            }
+
+            ctx.beginPath()
+            ctx.moveTo(start.x, start.y)
+            ctx.lineTo(end.x, end.y)
+            ctx.stroke()
+          }}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          linkCanvasObjectMode={() => 'replace'}
           linkColor={(link) => (link as GraphLink).isPrimary ? '#999' : '#f97316'}
           linkWidth={1.5}
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           linkLineDash={(link: any) => !link.isPrimary ? [5, 5] : null}
+          linkDirectionalParticles={(link: any) => link.isPrimary ? 0 : 2}
+          linkDirectionalParticleWidth={1.4}
+          linkDirectionalParticleSpeed={0.01}
           d3AlphaDecay={0.02}
           d3VelocityDecay={0.6}
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           onEngineStop={() => graphRef.current?.zoomToFit(400, 0.1)}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          onNodeClick={(node: any) => handleNodeClick(node)}
         />
       </div>
     </div>

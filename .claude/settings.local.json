@@ -19,7 +19,10 @@
       "Bash(node node_modules\\\\vite\\\\bin\\\\vite.js build)",
       "Bash(.\\\\node_modules\\\\.bin\\\\tsc.cmd -b)",
       "Bash(.\\\\node_modules\\\\.bin\\\\vite.cmd build *)",
-      "WebFetch(domain:vasturiano.github.io)"
+      "WebFetch(domain:vasturiano.github.io)",
+      "Bash(Start-Sleep -Seconds 3)",
+      "Bash(Get-Content \"C:\\\\Users\\\\MAUROB~1\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\E--GitHub-nodejs-gremlins-flow-graph\\\\9e515ebc-2d78-4c17-af5c-89aaa0c1b0b2\\\\tasks\\\\b7fce8y3z.output\" -Tail 10)",
+      "Bash(timeout 3)"
     ]
   }
 }
