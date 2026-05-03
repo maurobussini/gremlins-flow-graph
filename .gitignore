@@ -32,5 +32,6 @@ dist-ssr
 # Build output
 build
 .cache
+dist
 
 # Custom

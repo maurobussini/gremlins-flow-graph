@@ -1,6 +1,6 @@
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useRef } from 'react'
 import ForceGraph2D from 'react-force-graph-2d'
-import { Upload, FileJson, RotateCcw, Network } from 'lucide-react'
+import { Upload, FileJson, RotateCcw, Network, GitBranch } from 'lucide-react'
 import { Button } from './components/ui/button'
 import { Textarea } from './components/ui/textarea'
 
@@ -55,39 +55,6 @@ const defaultFlowData: FlowData = {
           "title": "{{settings.data.firstNewPostTitle}}"
         }
       }
-    },
-    {
-      "key": "createPostUsingInputs",
-      "description": "Create a new post using explicit step inputs and expected status codes",
-      "type": "http",
-      "inputs": {
-        "userId": "{{settings.data.firstNewPostUserId|int}}",
-        "title": "{{settings.data.firstNewPostTitle}}",
-        "content": "Lorem ipsum dolor sit amet"
-      },
-      "http": {
-        "method": "POST",
-        "url": "{{environment.data.apiBaseUrl}}/posts",
-        "expectedStatusCodes": [200, 201],
-        "body": {
-          "userId": "{{$inputs.userId}}",
-          "title": "{{$inputs.title}}",
-          "body": "{{$inputs.content}}"
-        }
-      },
-      "delay": 2000
-    },
-    {
-      "key": "getPostByEnvironmentVariable",
-      "description": "Extract a post using the id provided using an environment variable",
-      "inputs": {
-        "postId": "{{$env.MY_POST_ID}}"
-      },
-      "type": "http",
-      "http": {
-        "method": "GET",
-        "url": "{{environment.data.apiBaseUrl}}/posts/{{$inputs.postId}}"
-      }
     }
   ]
 }
@@ -127,11 +94,14 @@ interface GraphLink {
 }
 
 function App() {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const graphRef = useRef<any>(null)
   const [flowData, setFlowData] = useState<FlowData | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [jsonInput, setJsonInput] = useState('')
   const [showDialog, setShowDialog] = useState(true)
   const [isDragging, setIsDragging] = useState(false)
+  const [showDeps, setShowDeps] = useState(false)
 
   const loadFlowData = useCallback((data: FlowData) => {
     setFlowData(data)
@@ -144,21 +114,24 @@ function App() {
     try {
       const parsed = JSON.parse(jsonInput) as FlowData
       if (!parsed.title || !Array.isArray(parsed.steps)) {
-        throw new Error('Invalid format: must have "title" and "steps" array')
+        setError('Invalid format: must have "title" and "steps" array')
+        return
       }
       loadFlowData(parsed)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Invalid JSON')
+      setError('Invalid JSON: please check the syntax')
     }
   }
 
   const handleLoadDefault = () => {
+    setError(null)
     loadFlowData(defaultFlowData)
   }
 
   const handleReset = () => {
     setShowDialog(true)
     setFlowData(null)
+    setError(null)
   }
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -203,8 +176,8 @@ function App() {
       description: step.description
     }))
 
+    // Only sequential links (primary)
     const links: GraphLink[] = []
-
     for (let i = 0; i < flowData.steps.length - 1; i++) {
       links.push({
         source: flowData.steps[i].key,
@@ -213,41 +186,44 @@ function App() {
       })
     }
 
-    const stepKeys = new Set(flowData.steps.map(s => s.key))
-    flowData.steps.forEach(step => {
-      const allFields = [
-        step.http?.url,
-        JSON.stringify(step.http?.body),
-        step.condition,
-        ...Object.values(step.inputs || {}).map(v => JSON.stringify(v))
-      ]
+    // Add interpolation links if enabled
+    if (showDeps) {
+      const stepKeys = new Set(flowData.steps.map(s => s.key))
+      flowData.steps.forEach(step => {
+        const allFields = [
+          step.http?.url,
+          JSON.stringify(step.http?.body),
+          step.condition,
+          ...Object.values(step.inputs || {}).map(v => JSON.stringify(v))
+        ]
 
-      allFields.forEach(field => {
-        if (typeof field !== 'string') return
+        allFields.forEach(field => {
+          if (typeof field !== 'string') return
 
-        const matches = field.match(/\{\{(\w+)\./g)
-        if (matches) {
-          matches.forEach(match => {
-            const depKey = match.slice(2, -1)
-            if (stepKeys.has(depKey) && depKey !== step.key) {
-              const exists = links.some(
-                l => l.source === depKey && l.target === step.key && !l.isPrimary
-              )
-              if (!exists) {
-                links.push({
-                  source: depKey,
-                  target: step.key,
-                  isPrimary: false
-                })
+          const matches = field.match(/\{\{(\w+)\./g)
+          if (matches) {
+            matches.forEach(match => {
+              const depKey = match.slice(2, -1)
+              if (stepKeys.has(depKey) && depKey !== step.key) {
+                const exists = links.some(
+                  l => l.source === depKey && l.target === step.key && !l.isPrimary
+                )
+                if (!exists) {
+                  links.push({
+                    source: depKey,
+                    target: step.key,
+                    isPrimary: false
+                  })
+                }
               }
-            }
-          })
-        }
+            })
+          }
+        })
       })
-    })
+    }
 
     return { nodes, links }
-  }, [flowData])
+  }, [flowData, showDeps])
 
   if (error) return (
     <div className="p-5 text-red-500 bg-red-50 m-5 rounded-md">
@@ -255,6 +231,7 @@ function App() {
     </div>
   )
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   if (showDialog || !flowData) {
     return (
       <div
@@ -269,7 +246,7 @@ function App() {
               <Network className="w-8 h-8 text-white" />
             </div>
             <h2 className="text-xl font-bold">Gremlins Flow Graph</h2>
-            <p className="text-sm text-gray-500 mt-1">Incolla il contenuto del file JSON per visualizzare il grafo, oppure trascina un file .json qui</p>
+            <p className="text-sm text-gray-500 mt-1">Paste your JSON content to visualize the flow, or drag and drop a .json file here</p>
           </div>
           <div className="dialog-content">
             <Textarea
@@ -282,15 +259,20 @@ function App() {
           <div className="dialog-footer">
             <Button variant="outline" onClick={handleLoadDefault}>
               <FileJson className="w-4 h-4 mr-2" />
-              Carica Default
+              Load Default
             </Button>
             <Button onClick={handleLoadJson}>
               <Upload className="w-4 h-4 mr-2" />
-              Carica
+              Load
             </Button>
           </div>
+          {error && (
+            <div className="mt-3 p-3 bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg">
+              {error}
+            </div>
+          )}
         </div>
-        {isDragging && <div className="drop-overlay">Rilascia il file JSON</div>}
+        {isDragging && <div className="drop-overlay">Drop JSON file here</div>}
       </div>
     )
   }
@@ -299,21 +281,67 @@ function App() {
     <div className="app-container">
       <header className="app-header">
         <h1 className="text-lg font-semibold">{flowData.title}</h1>
-        <Button variant="outline" size="sm" onClick={handleReset}>
-          <RotateCcw className="w-4 h-4 mr-2" />
-          Nuovo
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant={showDeps ? "default" : "outline"}
+            size="sm"
+            onClick={() => setShowDeps(!showDeps)}
+          >
+            <GitBranch className="w-4 h-4 mr-2" />
+            {showDeps ? "Deps" : "Deps"}
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleReset}>
+            <RotateCcw className="w-4 h-4 mr-2" />
+            New
+          </Button>
+        </div>
       </header>
       <div className="graph-container">
         <ForceGraph2D
+          ref={graphRef}
           graphData={graphData}
           nodeLabel={(node) => `${(node as GraphNode).name} (${(node as GraphNode).type})`}
-          nodeColor={(node) => (node as GraphNode).type === 'http' ? '#4a90d9' : '#6b7280'}
-          nodeRelSize={6}
-          linkColor={(link) => (link as GraphLink).isPrimary ? '#000000' : '#dc2626'}
-          linkWidth={2}
+          nodeAutoColorBy="type"
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          nodeCanvasObject={(node: any, ctx, globalScale) => {
+            const label = node.name
+            const fontSize = 12/globalScale
+            ctx.font = `${fontSize}px Sans-Serif`
+            const textWidth = ctx.measureText(label).width
+            const bckgWidth = textWidth + fontSize * 0.2
+            const bckgHeight = fontSize + fontSize * 0.2
+
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.8)'
+            ctx.fillRect(node.x - bckgWidth / 2, node.y - bckgHeight / 2, bckgWidth, bckgHeight)
+
+            ctx.textAlign = 'center'
+            ctx.textBaseline = 'middle'
+            ctx.fillStyle = node.color
+            ctx.fillText(label, node.x, node.y)
+
+            node.__bckgDimensions = [bckgWidth, bckgHeight]
+          }}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          nodePointerAreaPaint={(node: any, color, ctx) => {
+            const bckgDimensions = node.__bckgDimensions
+            if (bckgDimensions) {
+              ctx.fillStyle = color
+              ctx.fillRect(
+                node.x - bckgDimensions[0] / 2,
+                node.y - bckgDimensions[1] / 2,
+                bckgDimensions[0],
+                bckgDimensions[1]
+              )
+            }
+          }}
+          linkColor={(link) => (link as GraphLink).isPrimary ? '#999' : '#f97316'}
+          linkWidth={1.5}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          linkLineDash={(link: any) => !link.isPrimary ? [5, 5] : null}
           d3AlphaDecay={0.02}
           d3VelocityDecay={0.6}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          onEngineStop={() => graphRef.current?.zoomToFit(400, 0.1)}
         />
       </div>
     </div>

@@ -13,7 +13,13 @@
       "Bash(npm list *)",
       "Bash(copy *)",
       "Bash(npm view *)",
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "Bash(npx vite)",
+      "Bash(node node_modules\\\\typescript\\\\bin\\\\tsc -b)",
+      "Bash(node node_modules\\\\vite\\\\bin\\\\vite.js build)",
+      "Bash(.\\\\node_modules\\\\.bin\\\\tsc.cmd -b)",
+      "Bash(.\\\\node_modules\\\\.bin\\\\vite.cmd build *)",
+      "WebFetch(domain:vasturiano.github.io)"
     ]
   }
 }
